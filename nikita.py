@@ -3,15 +3,10 @@ from datetime import datetime
 from telebot import types
 import time
 import threading
-import io
 import requests
 import random
-import json
 import urllib.parse
-from PIL import Image, ImageDraw, ImageFont
-import pytesseract
 import os
-import sys
 
 # ========== НАСТРОЙКИ ==========
 TOKEN = "8529993544:AAEHluimYCHsEmZmMYVVBE7hZpKaR149v88"
@@ -21,85 +16,10 @@ YOUR_CHAT_ID = 1551325264
 bot = tb.TeleBot(TOKEN)
 
 # Словари для хранения данных
-user_message_count = {}
-photo_buttons_map = {}
 user_data = {}
-
-# Проверка наличия Tesseract для OCR
-TESSERACT_AVAILABLE = False
-try:
-    if os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
-        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-        TESSERACT_AVAILABLE = True
-except:
-    pass
 
 
 # ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-
-def delete_message_after_delay(chat_id, message_id, delay=5):
-    """Удаляет сообщение через указанную задержку"""
-    time.sleep(delay)
-    try:
-        bot.delete_message(chat_id, message_id)
-    except:
-        pass
-
-
-def compress_image(image_data, quality=70):
-    """Сжимает изображение"""
-    try:
-        img = Image.open(io.BytesIO(image_data))
-        output = io.BytesIO()
-        if img.mode in ('RGBA', 'P'):
-            img = img.convert('RGB')
-        img.save(output, format='JPEG', quality=quality, optimize=True)
-        return output.getvalue()
-    except Exception as e:
-        print(f"Ошибка сжатия: {e}")
-        return image_data
-
-
-def create_meme_simple(image_data, top_text, bottom_text):
-    """Простое создание мема (без сложных шрифтов)"""
-    try:
-        img = Image.open(io.BytesIO(image_data))
-        draw = ImageDraw.Draw(img)
-        width, height = img.size
-
-        # Используем встроенный шрифт
-        font = ImageFont.load_default()
-
-        # Рисуем верхний текст
-        if top_text:
-            # Получаем размер текста
-            bbox = draw.textbbox((0, 0), top_text, font=font)
-            text_width = bbox[2] - bbox[0]
-            x = (width - text_width) // 2
-            y = 10
-            # Рисуем текст с обводкой
-            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
-                draw.text((x + dx, y + dy), top_text, font=font, fill="black")
-            draw.text((x, y), top_text, font=font, fill="white")
-
-        # Рисуем нижний текст
-        if bottom_text:
-            bbox = draw.textbbox((0, 0), bottom_text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            x = (width - text_width) // 2
-            y = height - text_height - 10
-            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
-                draw.text((x + dx, y + dy), bottom_text, font=font, fill="black")
-            draw.text((x, y), bottom_text, font=font, fill="white")
-
-        output = io.BytesIO()
-        img.save(output, format='JPEG')
-        return output.getvalue()
-    except Exception as e:
-        print(f"Ошибка создания мема: {e}")
-        return image_data
-
 
 def get_currency_rates():
     """Получает курсы валют"""
@@ -179,23 +99,19 @@ def get_weather(city):
         current = weather_data['current_weather']
         temp = current['temperature']
         wind_speed = current['windspeed']
-        wind_dir = current.get('winddirection', 0)
         
         # Получаем влажность из почасовых данных
         current_hour = datetime.now().hour
         humidity = weather_data['hourly']['relativehumidity_2m'][current_hour]
         
-        # Определяем погодные условия по температуре и времени
-        condition = get_condition(weather_data, current_hour)
-        
-        # Определяем направление ветра
-        wind_direction = get_wind_direction(wind_dir)
+        # Определяем погодные условия
+        condition = get_condition(weather_data)
         
         return f"🌍 <b>{city_name}, {country}</b>\n\n" \
                f"🌡 Температура: <b>{temp:.1f}°C</b>\n" \
                f"☁️ {condition}\n" \
                f"💧 Влажность: <b>{humidity}%</b>\n" \
-               f"💨 Ветер: <b>{wind_speed} км/ч</b> {wind_direction}\n\n" \
+               f"💨 Ветер: <b>{wind_speed} км/ч</b>\n\n" \
                f"📡 Данные: Open-Meteo.com"
                
     except Exception as e:
@@ -203,10 +119,9 @@ def get_weather(city):
         return "❌ Ошибка при получении погоды. Попробуйте другой город."
 
 
-def get_condition(weather_data, hour):
+def get_condition(weather_data):
     """Определяет погодные условия"""
     try:
-        # Пытаемся получить код погоды (если есть)
         if 'current_weather' in weather_data and 'weathercode' in weather_data['current_weather']:
             code = weather_data['current_weather']['weathercode']
             conditions = {
@@ -236,9 +151,7 @@ def get_condition(weather_data, hour):
     except:
         pass
     
-    # Если нет кода погоды, определяем по времени суток
     temp = weather_data['current_weather']['temperature']
-    
     if temp > 25:
         return "☀️ Жарко"
     elif temp > 20:
@@ -251,17 +164,8 @@ def get_condition(weather_data, hour):
         return "❄️ Морозно"
 
 
-def get_wind_direction(degrees):
-    """Определяет направление ветра по градусам"""
-    directions = ["северный", "северо-восточный", "восточный", 
-                  "юго-восточный", "южный", "юго-западный", 
-                  "западный", "северо-западный"]
-    index = round(degrees / 45) % 8
-    return directions[index]
-
-
 def translate_text(text, dest='en'):
-    """Перевод текста через Google Translate (ИСПРАВЛЕНО)"""
+    """Перевод текста через Google Translate"""
     try:
         encoded_text = urllib.parse.quote(text)
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={dest}&dt=t&q={encoded_text}"
@@ -282,54 +186,33 @@ def translate_text(text, dest='en'):
                 return "❌ Не удалось перевести текст"
         else:
             return "❌ Ошибка сервиса перевода"
-    except requests.exceptions.Timeout:
-        return "❌ Превышено время ожидания"
     except Exception as e:
         print(f"Ошибка перевода: {e}")
         return "❌ Ошибка перевода. Попробуйте позже."
 
 
 def generate_callsign(word):
-    """Генерирует позывной на основе одного слова (НОВАЯ ФУНКЦИЯ)"""
+    """Генерирует позывной на основе одного слова"""
     
-    # База приставок для позывных
     prefixes = ["Тихий", "Быстрый", "Дикий", "Мудрый", "Хитрый", 
-                "Смелый", "Вольный", "Ярый", "Вещий", "Рыжий",
-                "Северный", "Южный", "Западный", "Восточный", "Стальной",
+                "Смелый", "Вольный", "Ярый", "Северный", "Стальной",
                 "Огненный", "Ледяной", "Грозовой", "Солнечный", "Лунный"]
     
-    # База суффиксов для позывных
     suffixes = ["Волк", "Лис", "Медведь", "Орёл", "Сокол", 
                 "Барс", "Рысь", "Тигр", "Лев", "Ворон",
-                "Шторм", "Ветер", "Гром", "Молния", "Туча",
-                "Коготь", "Клык", "Меч", "Щит", "Копьё"]
+                "Шторм", "Ветер", "Гром", "Молния", "Коготь"]
     
-    # Очищаем входное слово
     word = word.strip().lower()
-    
-    # Генерируем случайные варианты
     results = []
     
     # Вариант 1: Приставка + слово
-    prefix = random.choice(prefixes)
-    results.append(f"🎖 {prefix} {word.title()}")
+    results.append(f"🎖 {random.choice(prefixes)} {word.title()}")
     
     # Вариант 2: слово + суффикс
-    suffix = random.choice(suffixes)
-    results.append(f"🎖 {word.title()} {suffix}")
+    results.append(f"🎖 {word.title()} {random.choice(suffixes)}")
     
     # Вариант 3: Приставка + суффикс (без слова)
     results.append(f"🎖 {random.choice(prefixes)} {random.choice(suffixes)}")
-    
-    # Вариант 4: слово в другом падеже
-    if word.endswith('а') or word.endswith('я'):
-        word_mod = word[:-1] + 'ая'
-    elif word.endswith('ок'):
-        word_mod = word[:-2] + 'очный'
-    else:
-        word_mod = word + 'ный'
-    
-    results.append(f"🎖 {random.choice(prefixes)} {word_mod.title()}")
     
     return results
 
@@ -340,23 +223,21 @@ def generate_callsign(word):
 def start_command(message):
     user_name = message.from_user.first_name
 
-    # Главное меню
+    # Главное меню - ТОЛЬКО РАБОЧИЕ КНОПКИ
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    btn1 = types.KeyboardButton('📸 Фото')
-    btn2 = types.KeyboardButton('💰 Курсы валют')
-    btn3 = types.KeyboardButton('🎲 Факт')
-    btn4 = types.KeyboardButton('😄 Анекдот')
-    btn5 = types.KeyboardButton('🌤 Погода')
-    btn6 = types.KeyboardButton('🔤 Перевод')
-    btn7 = types.KeyboardButton('🕐 Время')
-    btn8 = types.KeyboardButton('📅 Дата')
+    btn1 = types.KeyboardButton('💰 Курсы валют')
+    btn2 = types.KeyboardButton('🎲 Факт')
+    btn3 = types.KeyboardButton('😄 Анекдот')
+    btn4 = types.KeyboardButton('🌤 Погода')
+    btn5 = types.KeyboardButton('🔤 Перевод')
+    btn6 = types.KeyboardButton('🕐 Время')
+    btn7 = types.KeyboardButton('📅 Дата')
+    btn8 = types.KeyboardButton('🎯 Позывной')
     btn9 = types.KeyboardButton('❓ Помощь')
-    btn10 = types.KeyboardButton('🎯 Позывной')  # НОВАЯ КНОПКА
-    markup.add(btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btn10)
+    markup.add(btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9)
 
     welcome_text = f"👋 Привет, {user_name}!\n\n"
-    welcome_text += "Я многофункциональный бот. Выбери действие:\n\n"
-    welcome_text += "📸 Работа с фото (мемы, сжатие, текст)\n"
+    welcome_text += "Я бот. Выбери действие:\n\n"
     welcome_text += "💰 Курсы валют USD/EUR\n"
     welcome_text += "🎲 Случайные факты\n"
     welcome_text += "😄 Анекдоты\n"
@@ -364,19 +245,18 @@ def start_command(message):
     welcome_text += "🔤 Перевод текста\n"
     welcome_text += "🕐 Текущее время\n"
     welcome_text += "📅 Текущая дата\n"
-    welcome_text += "🎯 Генератор позывных по слову"
+    welcome_text += "🎯 Генератор позывных"
 
     bot.send_message(message.chat.id, welcome_text, reply_markup=markup)
 
 
-# ========== НОВАЯ КОМАНДА - ГЕНЕРАТОР ПОЗЫВНЫХ ==========
+# ========== ГЕНЕРАТОР ПОЗЫВНЫХ ==========
 
 @bot.message_handler(func=lambda message: message.text == '🎯 Позывной')
 def callsign_prompt(message):
     msg = bot.send_message(message.chat.id, 
                           "🎯 <b>Генератор позывных</b>\n\n"
-                          "Напиши одно слово (например: волк, космос, гроза, ночь),\n"
-                          "а я придумаю уникальные позывные!",
+                          "Напиши одно слово (например: волк, космос, гроза):",
                           parse_mode='HTML')
     bot.register_next_step_handler(msg, process_callsign)
 
@@ -385,173 +265,20 @@ def process_callsign(message):
     try:
         word = message.text.strip()
         
-        # Проверка на пустой ввод
-        if not word:
-            bot.send_message(message.chat.id, "❌ Напиши хотя бы одно слово!")
+        if not word or len(word) > 20:
+            bot.send_message(message.chat.id, "❌ Напиши одно слово (до 20 символов)")
             return
         
-        # Проверка на длину
-        if len(word) > 20:
-            bot.send_message(message.chat.id, "❌ Слишком длинное слово! Максимум 20 символов.")
-            return
-        
-        # Генерируем позывные
         results = generate_callsign(word)
         
-        # Формируем ответ
         response = f"🎯 <b>Позывные для слова '{word.title()}':</b>\n\n"
-        for i, result in enumerate(results, 1):
+        for result in results:
             response += f"{result}\n"
-        
-        response += "\n✨ Выбери тот, который больше нравится!"
         
         bot.send_message(message.chat.id, response, parse_mode='HTML')
         
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
-
-
-# ========== ОБРАБОТКА ФОТО ==========
-
-@bot.message_handler(func=lambda message: message.text == '📸 Фото')
-def photo_menu(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    btn1 = types.KeyboardButton('📤 Отправить фото')
-    btn2 = types.KeyboardButton('🔙 Главное меню')
-    markup.add(btn1, btn2)
-
-    bot.send_message(message.chat.id, "📸 Отправьте фото:", reply_markup=markup)
-
-
-@bot.message_handler(func=lambda message: message.text == '📤 Отправить фото')
-def send_photo_instruction(message):
-    bot.send_message(message.chat.id, "📤 Отправьте мне фото (как изображение, не файл)")
-
-
-@bot.message_handler(func=lambda message: message.text == '🔙 Главное меню')
-def back_to_main(message):
-    start_command(message)
-
-
-@bot.message_handler(content_types=['photo'])
-def get_photo(message):
-    user_name = message.from_user.first_name
-    user_id = message.from_user.id
-
-    # Кнопки для фото
-    markup = types.InlineKeyboardMarkup()
-    btn1 = types.InlineKeyboardButton('🎭 Сделать мем', callback_data='meme')
-    btn2 = types.InlineKeyboardButton('🗜 Сжать', callback_data='compress')
-    btn3 = types.InlineKeyboardButton('🔍 Распознать текст', callback_data='ocr')
-    markup.row(btn1, btn2, btn3)
-
-    sent_msg = bot.reply_to(message, '✅ Фото получено! Выберите действие:', reply_markup=markup)
-
-    # Сохраняем связи
-    photo_buttons_map[sent_msg.message_id] = {
-        'photo_id': message.message_id,
-        'buttons_id': sent_msg.message_id,
-        'user_id': user_id,
-        'user_name': user_name
-    }
-
-
-@bot.message_handler(content_types=['document'])
-def get_document(message):
-    if message.document.mime_type.startswith('image/'):
-        bot.reply_to(message, "📸 Пожалуйста, отправьте фото как изображение, а не файл")
-    else:
-        bot.send_message(message.chat.id, "❌ Пожалуйста, отправьте фото")
-
-
-# ========== ОБРАБОТКА КНОПОК ФОТО ==========
-
-@bot.callback_query_handler(func=lambda callback: True)
-def callback_message(callback):
-    try:
-        data = photo_buttons_map.get(callback.message.message_id)
-        if not data:
-            bot.answer_callback_query(callback.id, "❌ Фото не найдено")
-            return
-
-        if callback.data == 'meme':
-            msg = bot.send_message(callback.message.chat.id,
-                                   "📝 Введите текст для мема в формате:\n"
-                                   "верхний текст | нижний текст\n"
-                                   "Например: Привет | Мир")
-            bot.register_next_step_handler(msg, process_meme_text, callback.message)
-            bot.answer_callback_query(callback.id)
-
-        elif callback.data == 'compress':
-            photo_id = data['photo_id']
-            file_info = bot.get_file(photo_id)
-            downloaded = bot.download_file(file_info.file_path)
-            compressed = compress_image(downloaded)
-            bot.send_photo(callback.message.chat.id, compressed, caption="🗜 Сжатое фото")
-            bot.answer_callback_query(callback.id, "✅ Готово!")
-
-        elif callback.data == 'ocr':
-            if not TESSERACT_AVAILABLE:
-                bot.send_message(callback.message.chat.id, "❌ Распознавание текста временно недоступно")
-                bot.answer_callback_query(callback.id)
-                return
-                
-            photo_id = data['photo_id']
-            file_info = bot.get_file(photo_id)
-            downloaded = bot.download_file(file_info.file_path)
-            try:
-                img = Image.open(io.BytesIO(downloaded))
-                text = pytesseract.image_to_string(img, lang='rus+eng')
-                if text.strip():
-                    # Обрезаем если слишком длинный
-                    if len(text) > 1000:
-                        text = text[:1000] + "...\n(текст обрезан)"
-                    bot.send_message(callback.message.chat.id, f"📝 <b>Распознанный текст:</b>\n\n{text}", parse_mode='HTML')
-                else:
-                    bot.send_message(callback.message.chat.id, "😕 Не удалось распознать текст на фото")
-            except Exception as e:
-                bot.send_message(callback.message.chat.id, "❌ Ошибка распознавания")
-                print(f"Ошибка OCR: {e}")
-            bot.answer_callback_query(callback.id)
-
-    except Exception as e:
-        bot.answer_callback_query(callback.id, "❌ Ошибка")
-        print(f"Ошибка в callback: {e}")
-
-
-def process_meme_text(message, original_msg):
-    """Создание мема"""
-    try:
-        text = message.text
-        if '|' in text:
-            parts = text.split('|', 1)
-            top = parts[0].strip()
-            bottom = parts[1].strip() if len(parts) > 1 else ''
-        else:
-            top = text
-            bottom = ''
-
-        data = photo_buttons_map.get(original_msg.message_id)
-        if not data:
-            bot.send_message(message.chat.id, "❌ Фото не найдено")
-            return
-
-        photo_id = data['photo_id']
-        file_info = bot.get_file(photo_id)
-        downloaded = bot.download_file(file_info.file_path)
-
-        meme_data = create_meme_simple(downloaded, top, bottom)
-        bot.send_photo(message.chat.id, meme_data, caption="🎉 Мем готов!")
-
-        # Удаляем сообщение с запросом текста
-        try:
-            bot.delete_message(message.chat.id, message.message_id)
-        except:
-            pass
-
-    except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Ошибка: {str(e)}")
-        print(f"Ошибка создания мема: {e}")
 
 
 # ========== ДРУГИЕ КОМАНДЫ ==========
@@ -574,28 +301,21 @@ def joke_command(message):
 @bot.message_handler(func=lambda message: message.text == '🌤 Погода')
 def weather_prompt(message):
     msg = bot.send_message(message.chat.id, 
-                          "🌍 <b>Погода</b>\n\n"
-                          "Введите название города (например: Москва, Лондон, Париж):",
+                          "🌍 Введите название города:",
                           parse_mode='HTML')
     bot.register_next_step_handler(msg, process_weather)
 
 
 def process_weather(message):
     city = message.text.strip()
-    
-    # Отправляем сообщение о загрузке
-    waiting = bot.send_message(message.chat.id, "⏳ Получаю данные о погоде...")
-    
-    # Получаем погоду
+    waiting = bot.send_message(message.chat.id, "⏳ Получаю данные...")
     weather = get_weather(city)
     
-    # Удаляем сообщение о загрузке
     try:
         bot.delete_message(message.chat.id, waiting.message_id)
     except:
         pass
     
-    # Отправляем результат
     bot.send_message(message.chat.id, weather, parse_mode='HTML')
 
 
@@ -608,9 +328,7 @@ def translate_prompt(message):
     markup.add(btn1, btn2, btn3)
     
     msg = bot.send_message(message.chat.id, 
-                          "🌐 <b>Переводчик</b>\n\n"
-                          "Выберите направление перевода:",
-                          parse_mode='HTML',
+                          "🌐 Выберите направление перевода:",
                           reply_markup=markup)
     bot.register_next_step_handler(msg, process_translate_language)
 
@@ -627,28 +345,21 @@ def process_translate_language(message):
         target = "русский"
     
     msg = bot.send_message(message.chat.id, 
-                          f"📝 Введите текст для перевода на <b>{target}</b> язык:",
-                          parse_mode='HTML')
+                          f"📝 Введите текст для перевода на {target}:")
     bot.register_next_step_handler(msg, process_translate_text)
 
 
 def process_translate_text(message):
     try:
         dest = user_data.get(message.chat.id, 'en')
-        
-        # Отправляем сообщение о загрузке
         waiting = bot.send_message(message.chat.id, "⏳ Перевожу...")
-        
-        # Переводим
         translated = translate_text(message.text, dest)
         
-        # Удаляем сообщение о загрузке
         try:
             bot.delete_message(message.chat.id, waiting.message_id)
         except:
             pass
         
-        # Отправляем результат
         bot.send_message(message.chat.id, f"🔤 <b>Перевод:</b>\n\n{translated}", parse_mode='HTML')
         
     except Exception as e:
@@ -669,21 +380,22 @@ def date_command(message):
 
 @bot.message_handler(func=lambda message: message.text == '❓ Помощь')
 def help_command(message):
-    help_text = "🔹 <b>Как пользоваться ботом:</b>\n\n"
-    help_text += "📸 <b>Фото:</b> отправь фото и используй кнопки:\n"
-    help_text += "   • 🎭 Сделать мем - наложить текст\n"
-    help_text += "   • 🗜 Сжать - уменьшить размер\n"
-    help_text += "   • 🔍 Распознать текст - OCR\n\n"
-    help_text += "💰 <b>Курсы валют:</b> USD и EUR\n"
-    help_text += "🎲 <b>Факт:</b> случайный интересный факт\n"
-    help_text += "😄 <b>Анекдот:</b> поднять настроение\n"
-    help_text += "🌤 <b>Погода:</b> погода в любом городе\n"
-    help_text += "🔤 <b>Перевод:</b> перевод текста\n"
-    help_text += "🎯 <b>Позывной:</b> генератор уникальных позывных\n"
-    help_text += "🕐 <b>Время:</b> текущее время\n"
-    help_text += "📅 <b>Дата:</b> текущая дата"
+    help_text = "🔹 <b>Доступные команды:</b>\n\n"
+    help_text += "💰 Курсы валют - USD и EUR\n"
+    help_text += "🎲 Факт - интересный факт\n"
+    help_text += "😄 Анекдот - поднять настроение\n"
+    help_text += "🌤 Погода - погода в любом городе\n"
+    help_text += "🔤 Перевод - перевод текста\n"
+    help_text += "🎯 Позывной - генератор позывных\n"
+    help_text += "🕐 Время - текущее время\n"
+    help_text += "📅 Дата - текущая дата"
 
     bot.send_message(message.chat.id, help_text, parse_mode='HTML')
+
+
+@bot.message_handler(func=lambda message: message.text == '🔙 Главное меню')
+def back_to_main(message):
+    start_command(message)
 
 
 @bot.message_handler(func=lambda message: True)
@@ -691,15 +403,11 @@ def handle_all_messages(message):
     text = message.text.lower()
     
     if text in ['спасибо', 'спс', 'благодарю']:
-        bot.send_message(message.chat.id, "🙏 Пожалуйста! Рад помочь!")
+        bot.send_message(message.chat.id, "🙏 Пожалуйста!")
     elif text == 'привет':
         bot.send_message(message.chat.id, f"👋 Привет, {message.from_user.first_name}!")
     elif text == 'id':
         bot.send_message(message.chat.id, f"🆔 Ваш ID: {message.from_user.id}")
-    elif text == 'пока':
-        bot.send_message(message.chat.id, "👋 До встречи!")
-    elif text == 'бот':
-        bot.send_message(message.chat.id, "🤖 Я здесь!")
 
 
 # ========== ЗАПУСК ==========
@@ -707,25 +415,23 @@ def handle_all_messages(message):
 if __name__ == "__main__":
     print("=" * 50)
     print("✅ БОТ ЗАПУЩЕН!")
-    print("📱 Версия: 4.0 (Погода исправлена + Позывные)")
+    print("📱 Версия: 5.0 (Только рабочие функции)")
     print("📱 Токен:", TOKEN[:10] + "...")
     print("=" * 50)
     print("📋 Доступные команды:")
-    print("   • /start - главное меню")
-    print("   • 📸 Фото - работа с изображениями")
-    print("   • 🎯 Позывной - генератор позывных")
-    print("   • 🌤 Погода - погода в любом городе")
-    print("   • 🔤 Перевод - перевод текста")
-    print("=" * 50)
-    print("🔄 Бот работает в бесконечном цикле...")
+    print("   • 💰 Курсы валют")
+    print("   • 🎲 Факт")
+    print("   • 😄 Анекдот")
+    print("   • 🌤 Погода")
+    print("   • 🔤 Перевод")
+    print("   • 🎯 Позывной")
+    print("   • 🕐 Время")
+    print("   • 📅 Дата")
     print("=" * 50)
 
-    # Бесконечный цикл с перезапуском при ошибке
     while True:
         try:
             bot.polling(non_stop=True, interval=0, timeout=20)
         except Exception as e:
             print(f"❌ Ошибка: {e}")
-            print("🔄 Перезапуск через 5 секунд...")
             time.sleep(5)
-
