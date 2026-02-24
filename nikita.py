@@ -142,40 +142,122 @@ def get_joke():
 
 
 def get_weather(city):
-    """Получает погоду по городу (ИСПРАВЛЕНО)"""
+    """Получает реальную погоду онлайн"""
     try:
         # Очищаем название города
         city = city.strip().lower()
         
-        # Используем wttr.in с правильными параметрами
-        url = f"https://wttr.in/{city}?format=%c+%t+%w+%h&lang=ru"
-        headers = {'User-Agent': 'curl/7.68.0'}
+        # Используем Open-Meteo API (бесплатно, без ключа)
+        # Сначала получаем координаты города через геокодинг
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}&count=1&language=ru&format=json"
+        geo_response = requests.get(geo_url, timeout=5)
         
-        response = requests.get(url, headers=headers, timeout=10)
-        
-        if response.status_code == 200:
-            weather_text = response.text.strip()
-            if weather_text and "Unknown" not in weather_text:
-                # Парсим ответ
-                parts = weather_text.split()
-                if len(parts) >= 4:
-                    condition = parts[0]
-                    temp = parts[1]
-                    wind = parts[2]
-                    humidity = parts[3]
-                    
-                    return f"🌍 <b>Погода в {city.title()}</b>\n\n" \
-                           f"☁️ {condition}\n" \
-                           f"🌡 {temp}\n" \
-                           f"💨 Ветер: {wind}\n" \
-                           f"💧 Влажность: {humidity}"
-            
-            return f"🌍 <b>Погода в {city.title()}:</b>\n\n{weather_text}"
-        else:
+        if geo_response.status_code != 200:
             return f"❌ Город '{city}' не найден"
+        
+        geo_data = geo_response.json()
+        
+        if not geo_data.get('results'):
+            return f"❌ Город '{city}' не найден"
+        
+        # Получаем координаты
+        lat = geo_data['results'][0]['latitude']
+        lon = geo_data['results'][0]['longitude']
+        city_name = geo_data['results'][0]['name']
+        country = geo_data['results'][0].get('country', '')
+        
+        # Получаем погоду по координатам
+        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&hourly=temperature_2m,relativehumidity_2m,windspeed_10m&timezone=auto"
+        weather_response = requests.get(weather_url, timeout=5)
+        
+        if weather_response.status_code != 200:
+            return f"❌ Не удалось получить погоду для города {city_name}"
+        
+        weather_data = weather_response.json()
+        
+        # Парсим данные
+        current = weather_data['current_weather']
+        temp = current['temperature']
+        wind_speed = current['windspeed']
+        wind_dir = current.get('winddirection', 0)
+        
+        # Получаем влажность из почасовых данных
+        current_hour = datetime.now().hour
+        humidity = weather_data['hourly']['relativehumidity_2m'][current_hour]
+        
+        # Определяем погодные условия по температуре и времени
+        condition = get_condition(weather_data, current_hour)
+        
+        # Определяем направление ветра
+        wind_direction = get_wind_direction(wind_dir)
+        
+        return f"🌍 <b>{city_name}, {country}</b>\n\n" \
+               f"🌡 Температура: <b>{temp:.1f}°C</b>\n" \
+               f"☁️ {condition}\n" \
+               f"💧 Влажность: <b>{humidity}%</b>\n" \
+               f"💨 Ветер: <b>{wind_speed} км/ч</b> {wind_direction}\n\n" \
+               f"📡 Данные: Open-Meteo.com"
+               
     except Exception as e:
         print(f"Ошибка погоды: {e}")
         return "❌ Ошибка при получении погоды. Попробуйте другой город."
+
+
+def get_condition(weather_data, hour):
+    """Определяет погодные условия"""
+    try:
+        # Пытаемся получить код погоды (если есть)
+        if 'current_weather' in weather_data and 'weathercode' in weather_data['current_weather']:
+            code = weather_data['current_weather']['weathercode']
+            conditions = {
+                0: "☀️ Ясно",
+                1: "🌤 Малооблачно",
+                2: "⛅ Переменная облачность",
+                3: "☁️ Пасмурно",
+                45: "🌫 Туман",
+                48: "🌫 Туман",
+                51: "🌧 Морось",
+                53: "🌧 Морось",
+                55: "🌧 Морось",
+                61: "🌧 Небольшой дождь",
+                63: "🌧 Дождь",
+                65: "🌧 Сильный дождь",
+                71: "🌨 Небольшой снег",
+                73: "🌨 Снег",
+                75: "🌨 Сильный снег",
+                80: "🌧 Дождь",
+                81: "🌧 Дождь",
+                82: "🌧 Сильный дождь",
+                95: "⛈ Гроза",
+                96: "⛈ Гроза",
+                99: "⛈ Гроза"
+            }
+            return conditions.get(code, "☁️ Облачно")
+    except:
+        pass
+    
+    # Если нет кода погоды, определяем по времени суток
+    temp = weather_data['current_weather']['temperature']
+    
+    if temp > 25:
+        return "☀️ Жарко"
+    elif temp > 20:
+        return "🌤 Тепло"
+    elif temp > 10:
+        return "⛅ Прохладно"
+    elif temp > 0:
+        return "☁️ Холодно"
+    else:
+        return "❄️ Морозно"
+
+
+def get_wind_direction(degrees):
+    """Определяет направление ветра по градусам"""
+    directions = ["северный", "северо-восточный", "восточный", 
+                  "юго-восточный", "южный", "юго-западный", 
+                  "западный", "северо-западный"]
+    index = round(degrees / 45) % 8
+    return directions[index]
 
 
 def translate_text(text, dest='en'):
@@ -646,3 +728,4 @@ if __name__ == "__main__":
             print(f"❌ Ошибка: {e}")
             print("🔄 Перезапуск через 5 секунд...")
             time.sleep(5)
+
