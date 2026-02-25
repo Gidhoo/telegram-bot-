@@ -2,4 +2,3 @@ pyTelegramBotAPI
 requests
 Pillow
 urllib3
-pytesseract
