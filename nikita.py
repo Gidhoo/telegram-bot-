@@ -13,13 +13,14 @@ from PIL import Image
 # ========== НАСТРОЙКИ ==========
 TOKEN = "8529993544:AAEHluimYCHsEmZmMYVVBE7hZpKaR149v88"
 YOUR_CHAT_ID = 1551325264
-DEEPSEEK_KEY = "sk-d838f69da7794f3998464fd7ead477b9"  # Ваш ключ DeepSeek
+DEEPSEEK_KEY = "sk-d838f69da7794f3998464fd7ead477b9"
 
 # ========== ИНИЦИАЛИЗАЦИЯ ==========
 bot = tb.TeleBot(TOKEN)
 
 # Словари для хранения данных
 user_data = {}
+photo_buttons_map = {}  # Для хранения фото
 
 
 # ========== НЕЙРОСЕТЕВЫЕ ФУНКЦИИ ==========
@@ -61,13 +62,9 @@ def generate_image(prompt):
     try:
         print(f"🎨 Генерирую картинку: {prompt}")
         
-        # Кодируем промпт для URL
         encoded_prompt = urllib.parse.quote(prompt)
-        
-        # Формируем URL для генерации
         url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
         
-        # Добавляем параметры для лучшего качества
         params = {
             "width": 1024,
             "height": 1024,
@@ -75,7 +72,6 @@ def generate_image(prompt):
             "model": "flux"
         }
         
-        # Получаем картинку
         response = requests.get(url, params=params, timeout=30)
         
         if response.status_code == 200:
@@ -94,13 +90,13 @@ def get_movie_recommendation(mood):
     """Рекомендация фильма по настроению"""
     
     recommendations = {
-        "веселый": ["🎬 1+1 (2011)", "🎬 Мальчишник в Вегасе (2009)", "🎬 О чём говорят мужчины (2010)"],
-        "грустный": ["🎬 Побег из Шоушенка (1994)", "🎬 Зеленая миля (1999)", "🎬 Хатико (2009)"],
-        "романтичный": ["🎬 500 дней лета (2009)", "🎬 Гордость и предубеждение (2005)", "🎬 Вечное сияние чистого разума (2004)"],
-        "страшный": ["🎬 Заклятие (2013)", "🎬 Астрал (2010)", "🎬 Оно (2017)"],
-        "фантастика": ["🎬 Начало (2010)", "🎬 Интерстеллар (2014)", "🎬 Матрица (1999)"],
-        "боевик": ["🎬 Тёмный рыцарь (2008)", "🎬 Безумный Макс (2015)", "🎬 Джон Уик (2014)"],
-        "детектив": ["🎬 Шерлок Холмс (2009)", "🎬 Достать ножи (2019)", "🎬 Семь (1995)"]
+        "веселый": ["🎬 1+1 (2011) - Французская комедия", "🎬 Мальчишник в Вегасе (2009) - Комедия", "🎬 О чём говорят мужчины (2010) - Комедия"],
+        "грустный": ["🎬 Побег из Шоушенка (1994) - Драма", "🎬 Зеленая миля (1999) - Драма", "🎬 Хатико (2009) - Драма"],
+        "романтичный": ["🎬 500 дней лета (2009) - Романтика", "🎬 Гордость и предубеждение (2005) - Романтика", "🎬 Вечное сияние чистого разума (2004) - Фантастика, Романтика"],
+        "страшный": ["🎬 Заклятие (2013) - Ужасы", "🎬 Астрал (2010) - Ужасы", "🎬 Оно (2017) - Ужасы"],
+        "фантастика": ["🎬 Начало (2010) - Фантастика", "🎬 Интерстеллар (2014) - Фантастика", "🎬 Матрица (1999) - Фантастика"],
+        "боевик": ["🎬 Тёмный рыцарь (2008) - Боевик", "🎬 Безумный Макс (2015) - Боевик", "🎬 Джон Уик (2014) - Боевик"],
+        "детектив": ["🎬 Шерлок Холмс (2009) - Детектив", "🎬 Достать ножи (2019) - Детектив", "🎬 Семь (1995) - Детектив"]
     }
     
     mood = mood.lower()
@@ -108,56 +104,136 @@ def get_movie_recommendation(mood):
         if key in mood:
             return random.choice(recommendations[key])
     
-    # Если настроение не определено
     all_movies = []
     for movies in recommendations.values():
         all_movies.extend(movies)
     return random.choice(all_movies)
 
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
+# ========== ФУНКЦИИ ДЛЯ ФОТО ==========
+
+def compress_image(image_data, quality=70):
+    """Сжимает изображение"""
+    try:
+        img = Image.open(io.BytesIO(image_data))
+        output = io.BytesIO()
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        img.save(output, format='JPEG', quality=quality, optimize=True)
+        return output.getvalue()
+    except Exception as e:
+        print(f"Ошибка сжатия: {e}")
+        return image_data
+
+
+def create_meme_simple(image_data, top_text, bottom_text):
+    """Простое создание мема"""
+    try:
+        img = Image.open(io.BytesIO(image_data))
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+
+        font = ImageFont.load_default()
+
+        if top_text:
+            bbox = draw.textbbox((0, 0), top_text, font=font)
+            text_width = bbox[2] - bbox[0]
+            x = (width - text_width) // 2
+            y = 10
+            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                draw.text((x + dx, y + dy), top_text, font=font, fill="black")
+            draw.text((x, y), top_text, font=font, fill="white")
+
+        if bottom_text:
+            bbox = draw.textbbox((0, 0), bottom_text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            x = (width - text_width) // 2
+            y = height - text_height - 10
+            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                draw.text((x + dx, y + dy), bottom_text, font=font, fill="black")
+            draw.text((x, y), bottom_text, font=font, fill="white")
+
+        output = io.BytesIO()
+        img.save(output, format='JPEG')
+        return output.getvalue()
+    except Exception as e:
+        print(f"Ошибка создания мема: {e}")
+        return image_data
+
+
+# ========== КУРСЫ ВАЛЮТ (ОНЛАЙН) ==========
 
 def get_currency_rates():
-    """Получает курсы валют"""
+    """Получает актуальные курсы валют с сайта ЦБ РФ"""
     try:
+        # Прямой запрос к сайту ЦБ РФ
         response = requests.get("https://www.cbr-xml-daily.ru/daily_json.js", timeout=5)
-        data = response.json()
-        usd = data['Valute']['USD']['Value']
-        eur = data['Valute']['EUR']['Value']
-        return f"💵 USD: {usd:.2f} ₽\n💶 EUR: {eur:.2f} ₽"
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Получаем данные по всем основным валютам
+            usd = data['Valute']['USD']['Value']
+            eur = data['Valute']['EUR']['Value']
+            cny = data['Valute']['CNY']['Value']  # Юань
+            gbp = data['Valute']['GBP']['Value']  # Фунт
+            jpy = data['Valute']['JPY']['Value']  # Йена
+            
+            # Получаем изменения за день
+            usd_diff = data['Valute']['USD']['Previous'] - usd
+            eur_diff = data['Valute']['EUR']['Previous'] - eur
+            
+            # Формируем красивое сообщение
+            result = "💱 <b>Актуальные курсы валют:</b>\n\n"
+            result += f"🇺🇸 USD: <b>{usd:.2f} ₽</b>"
+            if usd_diff > 0:
+                result += f" (📉 {usd_diff:.2f})\n"
+            elif usd_diff < 0:
+                result += f" (📈 {abs(usd_diff):.2f})\n"
+            else:
+                result += " (🔹 0.00)\n"
+            
+            result += f"🇪🇺 EUR: <b>{eur:.2f} ₽</b>"
+            if eur_diff > 0:
+                result += f" (📉 {eur_diff:.2f})\n"
+            elif eur_diff < 0:
+                result += f" (📈 {abs(eur_diff):.2f})\n"
+            else:
+                result += " (🔹 0.00)\n"
+            
+            result += f"🇨🇳 CNY: <b>{cny:.2f} ₽</b>\n"
+            result += f"🇬🇧 GBP: <b>{gbp:.2f} ₽</b>\n"
+            result += f"🇯🇵 JPY: <b>{jpy:.2f} ₽</b>\n\n"
+            result += f"📅 Обновлено: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
+            result += f"📊 Данные: ЦБ РФ"
+            
+            return result
+        else:
+            return "❌ Не удалось получить курсы валют. Попробуйте позже."
+            
     except Exception as e:
-        print(f"Ошибка курсов: {e}")
-        return "❌ Не удалось получить курсы валют"
+        print(f"Ошибка получения курсов: {e}")
+        return get_currency_rates_fallback()
 
 
-def get_random_fact():
-    """Случайный факт"""
-    facts = [
-        "🐝 Пчёлы могут узнавать человеческие лица",
-        "🌊 Океан покрывает 71% поверхности Земли",
-        "🦒 Жирафы спят всего 2 часа в сутки",
-        "🍌 Банан - это ягода",
-        "🐙 У осьминога три сердца",
-        "❄️ Антарктида - самая большая пустыня в мире",
-        "🦷 Улитки могут спать до 3 лет",
-        "🌍 В Австралии живёт больше кенгуру, чем людей",
-        "🧠 Мозг человека работает быстрее любого компьютера",
-        "🐧 Пингвины могут выпить морскую воду без вреда для здоровья",
-    ]
-    return random.choice(facts)
+def get_currency_rates_fallback():
+    """Запасной вариант получения курсов"""
+    try:
+        # Используем альтернативный источник
+        response = requests.get("https://api.exchangerate-api.com/v4/latest/RUB", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            usd = 1 / data['rates']['USD']
+            eur = 1 / data['rates']['EUR']
+            return f"💱 Курсы валют:\n🇺🇸 USD: {usd:.2f} ₽\n🇪🇺 EUR: {eur:.2f} ₽\n\n📊 Данные: ExchangeRate-API"
+    except:
+        pass
+    
+    return "❌ Сервис временно недоступен"
 
 
-def get_joke():
-    """Случайный анекдот"""
-    jokes = [
-        "— Дорогой, я решила стать вегетарианкой!\n— Зачем?\n— Чтобы спасти животных!\n— А ты знаешь, сколько растений погибает ради твоего спасения?",
-        "Встречаются два программиста:\n— Ты знаешь, я вчера целый день искал себе девушку.\n— Ну и как, нашёл?\n— Нет, зато нашёл 404 ошибку.",
-        "— Почему программисты путают Хэллоуин и Рождество?\n— Потому что 31 Oct = 25 Dec",
-        "Учительница спрашивает Вовочку:\n— Вовочка, почему ты опять опоздал?\n— Марья Ивановна, я спешил в школу, но увидел табличку «Школа — 50 метров» и решил, что успею пройти это расстояние за 50 секунд...",
-        "— Доктор, у меня шизофрения!\n— А у меня аллергия на глупых пациентов.\n— А я люблю котиков!\n— Вот видите, мы уже нашли общий язык.",
-    ]
-    return random.choice(jokes)
-
+# ========== ОСТАЛЬНЫЕ ФУНКЦИИ ==========
 
 def get_weather(city):
     """Получает реальную погоду онлайн"""
@@ -201,12 +277,11 @@ def get_weather(city):
                f"🌡 Температура: <b>{temp:.1f}°C</b>\n" \
                f"☁️ {condition}\n" \
                f"💧 Влажность: <b>{humidity}%</b>\n" \
-               f"💨 Ветер: <b>{wind_speed} км/ч</b>\n\n" \
-               f"📡 Данные: Open-Meteo.com"
+               f"💨 Ветер: <b>{wind_speed} км/ч</b>"
                
     except Exception as e:
         print(f"Ошибка погоды: {e}")
-        return "❌ Ошибка при получении погоды. Попробуйте другой город."
+        return "❌ Ошибка при получении погоды"
 
 
 def get_condition(weather_data):
@@ -278,7 +353,7 @@ def translate_text(text, dest='en'):
             return "❌ Ошибка сервиса перевода"
     except Exception as e:
         print(f"Ошибка перевода: {e}")
-        return "❌ Ошибка перевода. Попробуйте позже."
+        return "❌ Ошибка перевода"
 
 
 def generate_callsign(word):
@@ -308,7 +383,7 @@ def generate_callsign(word):
 def start_command(message):
     user_name = message.from_user.first_name
 
-    # Главное меню с нейросетями
+    # Главное меню
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     
     # Кнопки нейросетей
@@ -316,31 +391,31 @@ def start_command(message):
     btn_ai2 = types.KeyboardButton('🎨 Сгенерировать картинку')
     btn_ai3 = types.KeyboardButton('🎬 Фильм по настроению')
     
+    # Кнопка для фото
+    btn_photo = types.KeyboardButton('📸 Отправить фото')
+    
     # Обычные кнопки
-    btn1 = types.KeyboardButton('💰 Курсы валют')
-    btn2 = types.KeyboardButton('🎲 Факт')
-    btn3 = types.KeyboardButton('😄 Анекдот')
-    btn4 = types.KeyboardButton('🌤 Погода')
-    btn5 = types.KeyboardButton('🔤 Перевод')
-    btn6 = types.KeyboardButton('🕐 Время')
-    btn7 = types.KeyboardButton('📅 Дата')
-    btn8 = types.KeyboardButton('🎯 Позывной')
-    btn9 = types.KeyboardButton('❓ Помощь')
+    btn_currency = types.KeyboardButton('💰 Курсы валют')
+    btn_weather = types.KeyboardButton('🌤 Погода')
+    btn_translate = types.KeyboardButton('🔤 Перевод')
+    btn_callsign = types.KeyboardButton('🎯 Позывной')
+    btn_help = types.KeyboardButton('❓ Помощь')
     
     # Добавляем кнопки в меню
     markup.add(btn_ai1, btn_ai2, btn_ai3)
-    markup.add(btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9)
+    markup.add(btn_photo)
+    markup.add(btn_currency, btn_weather, btn_translate, btn_callsign, btn_help)
 
     welcome_text = f"👋 Привет, {user_name}!\n\n"
-    welcome_text += "🤖 <b>НЕЙРОСЕТИ (DeepSeek):</b>\n"
-    welcome_text += "• Спросить DeepSeek - задай любой вопрос (как мне)\n"
+    welcome_text += "🤖 <b>НЕЙРОСЕТИ:</b>\n"
+    welcome_text += "• Спросить DeepSeek - задай любой вопрос\n"
     welcome_text += "• Сгенерировать картинку - опиши что хочешь\n"
-    welcome_text += "• Фильм по настроению - нейросеть подберет фильм\n\n"
-    welcome_text += "📱 <b>Обычные функции:</b>\n"
-    welcome_text += "💰 Курсы валют, 🎲 Факты, 😄 Анекдоты\n"
-    welcome_text += "🌤 Погода, 🔤 Перевод, 🕐 Время, 📅 Дата\n"
-    welcome_text += "🎯 Позывной\n\n"
-    welcome_text += "Выбери действие!"
+    welcome_text += "• Фильм по настроению - подбор фильма\n\n"
+    welcome_text += "📸 <b>ФОТО:</b>\n"
+    welcome_text += "• Отправь фото - сделаем мем, сожмем или распознаем текст\n\n"
+    welcome_text += "💰 <b>ДРУГИЕ ФУНКЦИИ:</b>\n"
+    welcome_text += "• Курсы валют (онлайн)\n"
+    welcome_text += "• Погода, перевод, позывной"
 
     bot.send_message(message.chat.id, welcome_text, reply_markup=markup, parse_mode='HTML')
 
@@ -350,8 +425,7 @@ def start_command(message):
 @bot.message_handler(func=lambda message: message.text == '🤖 Спросить DeepSeek')
 def ai_prompt(message):
     msg = bot.send_message(message.chat.id, 
-                          "🤖 <b>DeepSeek AI готов ответить!</b>\n\n"
-                          "Задай любой вопрос (можешь спросить как у меня):",
+                          "🤖 <b>DeepSeek AI готов ответить!</b>\n\nЗадай любой вопрос:",
                           parse_mode='HTML')
     bot.register_next_step_handler(msg, process_ai_question)
 
@@ -361,7 +435,6 @@ def process_ai_question(message):
         question = message.text.strip()
         waiting = bot.send_message(message.chat.id, "⏳ DeepSeek думает...")
         
-        # Получаем ответ от DeepSeek
         response = get_deepseek_response(question)
         
         try:
@@ -369,13 +442,7 @@ def process_ai_question(message):
         except:
             pass
         
-        # Отправляем ответ (если слишком длинный, разбиваем)
-        if len(response) > 4000:
-            parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
-            for part in parts:
-                bot.send_message(message.chat.id, f"🤖 <b>DeepSeek:</b>\n\n{part}", parse_mode='HTML')
-        else:
-            bot.send_message(message.chat.id, f"🤖 <b>DeepSeek:</b>\n\n{response}", parse_mode='HTML')
+        bot.send_message(message.chat.id, f"🤖 <b>DeepSeek:</b>\n\n{response}", parse_mode='HTML')
         
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
@@ -384,9 +451,7 @@ def process_ai_question(message):
 @bot.message_handler(func=lambda message: message.text == '🎨 Сгенерировать картинку')
 def image_prompt(message):
     msg = bot.send_message(message.chat.id, 
-                          "🎨 <b>Генерация картинки</b>\n\n"
-                          "Опиши что хочешь увидеть (на русском или английском):\n"
-                          "Например: 'красивый закат в горах', 'робот играет на пианино', 'киберпанк город'",
+                          "🎨 <b>Генерация картинки</b>\n\nОпиши что хочешь увидеть:",
                           parse_mode='HTML')
     bot.register_next_step_handler(msg, process_image_generation)
 
@@ -401,7 +466,6 @@ def process_image_generation(message):
         
         waiting = bot.send_message(message.chat.id, "🎨 Генерирую картинку... (до 30 секунд)")
         
-        # Генерируем картинку
         image_data = generate_image(prompt)
         
         try:
@@ -417,10 +481,7 @@ def process_image_generation(message):
                 parse_mode='HTML'
             )
         else:
-            bot.send_message(
-                message.chat.id, 
-                "❌ Не удалось сгенерировать картинку. Попробуйте другое описание."
-            )
+            bot.send_message(message.chat.id, "❌ Не удалось сгенерировать картинку")
             
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
@@ -447,34 +508,128 @@ def process_movie(message):
         except:
             pass
         
-        bot.send_message(message.chat.id, f"🎬 <b>Рекомендация для настроения '{mood}':</b>\n\n{movie}", parse_mode='HTML')
+        bot.send_message(message.chat.id, f"🎬 <b>Рекомендация:</b>\n\n{movie}", parse_mode='HTML')
         
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
 
 
-# ========== ДРУГИЕ КОМАНДЫ ==========
+# ========== ОБРАБОТКА ФОТО ==========
+
+@bot.message_handler(func=lambda message: message.text == '📸 Отправить фото')
+def photo_instruction(message):
+    bot.send_message(message.chat.id, "📸 Отправьте мне фото (как изображение)")
+
+
+@bot.message_handler(content_types=['photo'])
+def get_photo(message):
+    user_id = message.from_user.id
+    user_name = message.from_user.first_name
+
+    # Кнопки для фото
+    markup = types.InlineKeyboardMarkup()
+    btn1 = types.InlineKeyboardButton('🎭 Сделать мем', callback_data='meme')
+    btn2 = types.InlineKeyboardButton('🗜 Сжать', callback_data='compress')
+    btn3 = types.InlineKeyboardButton('🔍 Распознать текст', callback_data='ocr')
+    markup.row(btn1, btn2, btn3)
+
+    sent_msg = bot.reply_to(message, '✅ Фото получено! Выберите действие:', reply_markup=markup)
+
+    # Сохраняем связи
+    photo_buttons_map[sent_msg.message_id] = {
+        'photo_id': message.message_id,
+        'buttons_id': sent_msg.message_id,
+        'user_id': user_id,
+        'user_name': user_name
+    }
+
+
+@bot.callback_query_handler(func=lambda callback: True)
+def callback_photo(callback):
+    try:
+        data = photo_buttons_map.get(callback.message.message_id)
+        if not data:
+            bot.answer_callback_query(callback.id, "❌ Фото не найдено")
+            return
+
+        if callback.data == 'meme':
+            msg = bot.send_message(callback.message.chat.id,
+                                  "📝 Введите текст для мема (верх | низ):\nНапример: Привет | Мир")
+            bot.register_next_step_handler(msg, process_meme_text, callback.message)
+            bot.answer_callback_query(callback.id)
+
+        elif callback.data == 'compress':
+            photo_id = data['photo_id']
+            file_info = bot.get_file(photo_id)
+            downloaded = bot.download_file(file_info.file_path)
+            compressed = compress_image(downloaded)
+            bot.send_photo(callback.message.chat.id, compressed, caption="🗜 Сжатое фото")
+            bot.answer_callback_query(callback.id, "✅ Готово!")
+
+        elif callback.data == 'ocr':
+            photo_id = data['photo_id']
+            file_info = bot.get_file(photo_id)
+            downloaded = bot.download_file(file_info.file_path)
+            try:
+                img = Image.open(io.BytesIO(downloaded))
+                text = pytesseract.image_to_string(img, lang='rus+eng')
+                if text.strip():
+                    bot.send_message(callback.message.chat.id, f"📝 Текст:\n\n{text[:1000]}")
+                else:
+                    bot.send_message(callback.message.chat.id, "😕 Текст не найден")
+            except:
+                bot.send_message(callback.message.chat.id, "❌ Ошибка распознавания")
+            bot.answer_callback_query(callback.id)
+
+    except Exception as e:
+        bot.answer_callback_query(callback.id, "❌ Ошибка")
+        print(f"Ошибка: {e}")
+
+
+def process_meme_text(message, original_msg):
+    """Создание мема"""
+    try:
+        text = message.text
+        if '|' in text:
+            parts = text.split('|', 1)
+            top = parts[0].strip()
+            bottom = parts[1].strip() if len(parts) > 1 else ''
+        else:
+            top = text
+            bottom = ''
+
+        data = photo_buttons_map.get(original_msg.message_id)
+        if not data:
+            bot.send_message(message.chat.id, "❌ Фото не найдено")
+            return
+
+        photo_id = data['photo_id']
+        file_info = bot.get_file(photo_id)
+        downloaded = bot.download_file(file_info.file_path)
+
+        meme_data = create_meme_simple(downloaded, top, bottom)
+        bot.send_photo(message.chat.id, meme_data, caption="🎉 Мем готов!")
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Ошибка: {str(e)}")
+
+
+# ========== ОБЫЧНЫЕ КОМАНДЫ ==========
 
 @bot.message_handler(func=lambda message: message.text == '💰 Курсы валют')
 def currency_command(message):
-    bot.send_message(message.chat.id, get_currency_rates())
-
-
-@bot.message_handler(func=lambda message: message.text == '🎲 Факт')
-def fact_command(message):
-    bot.send_message(message.chat.id, get_random_fact())
-
-
-@bot.message_handler(func=lambda message: message.text == '😄 Анекдот')
-def joke_command(message):
-    bot.send_message(message.chat.id, get_joke())
+    msg = bot.send_message(message.chat.id, "⏳ Получаю актуальные курсы...")
+    rates = get_currency_rates()
+    try:
+        bot.delete_message(message.chat.id, msg.message_id)
+    except:
+        pass
+    bot.send_message(message.chat.id, rates, parse_mode='HTML')
 
 
 @bot.message_handler(func=lambda message: message.text == '🌤 Погода')
 def weather_prompt(message):
-    msg = bot.send_message(message.chat.id, 
-                          "🌍 Введите название города:",
-                          parse_mode='HTML')
+    msg = bot.send_message(message.chat.id, "🌍 Введите название города:")
     bot.register_next_step_handler(msg, process_weather)
 
 
@@ -482,12 +637,10 @@ def process_weather(message):
     city = message.text.strip()
     waiting = bot.send_message(message.chat.id, "⏳ Получаю данные...")
     weather = get_weather(city)
-    
     try:
         bot.delete_message(message.chat.id, waiting.message_id)
     except:
         pass
-    
     bot.send_message(message.chat.id, weather, parse_mode='HTML')
 
 
@@ -516,8 +669,7 @@ def process_translate_language(message):
         user_data[message.chat.id] = 'ru'
         target = "русский"
     
-    msg = bot.send_message(message.chat.id, 
-                          f"📝 Введите текст для перевода на {target}:")
+    msg = bot.send_message(message.chat.id, f"📝 Введите текст для перевода на {target}:")
     bot.register_next_step_handler(msg, process_translate_text)
 
 
@@ -526,14 +678,11 @@ def process_translate_text(message):
         dest = user_data.get(message.chat.id, 'en')
         waiting = bot.send_message(message.chat.id, "⏳ Перевожу...")
         translated = translate_text(message.text, dest)
-        
         try:
             bot.delete_message(message.chat.id, waiting.message_id)
         except:
             pass
-        
         bot.send_message(message.chat.id, f"🔤 <b>Перевод:</b>\n\n{translated}", parse_mode='HTML')
-        
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Ошибка: {str(e)}")
 
@@ -541,8 +690,7 @@ def process_translate_text(message):
 @bot.message_handler(func=lambda message: message.text == '🎯 Позывной')
 def callsign_prompt(message):
     msg = bot.send_message(message.chat.id, 
-                          "🎯 <b>Генератор позывных</b>\n\n"
-                          "Напиши одно слово (например: волк, космос, гроза):",
+                          "🎯 <b>Генератор позывных</b>\n\nНапиши одно слово:",
                           parse_mode='HTML')
     bot.register_next_step_handler(msg, process_callsign)
 
@@ -567,33 +715,19 @@ def process_callsign(message):
         bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
 
 
-@bot.message_handler(func=lambda message: message.text == '🕐 Время')
-def time_command(message):
-    current_time = datetime.now().strftime('%H:%M:%S')
-    bot.send_message(message.chat.id, f"🕐 <b>Текущее время:</b> {current_time}", parse_mode='HTML')
-
-
-@bot.message_handler(func=lambda message: message.text == '📅 Дата')
-def date_command(message):
-    current_date = datetime.now().strftime('%d.%m.%Y')
-    bot.send_message(message.chat.id, f"📅 <b>Текущая дата:</b> {current_date}", parse_mode='HTML')
-
-
 @bot.message_handler(func=lambda message: message.text == '❓ Помощь')
 def help_command(message):
-    help_text = "🔹 <b>НЕЙРОСЕТИ (DeepSeek):</b>\n"
-    help_text += "🤖 Спросить DeepSeek - задай любой вопрос\n"
+    help_text = "🔹 <b>НЕЙРОСЕТИ:</b>\n"
+    help_text += "🤖 Спросить DeepSeek - любой вопрос\n"
     help_text += "🎨 Сгенерировать картинку - создай изображение\n"
     help_text += "🎬 Фильм по настроению - подбор фильма\n\n"
-    help_text += "🔹 <b>Обычные функции:</b>\n"
-    help_text += "💰 Курсы валют - USD и EUR\n"
-    help_text += "🎲 Факт - интересный факт\n"
-    help_text += "😄 Анекдот - поднять настроение\n"
-    help_text += "🌤 Погода - погода в любом городе\n"
-    help_text += "🔤 Перевод - перевод текста\n"
-    help_text += "🎯 Позывной - генератор позывных\n"
-    help_text += "🕐 Время - текущее время\n"
-    help_text += "📅 Дата - текущая дата"
+    help_text += "🔹 <b>ФОТО:</b>\n"
+    help_text += "📸 Отправить фото - мемы, сжатие, OCR\n\n"
+    help_text += "🔹 <b>ДРУГИЕ:</b>\n"
+    help_text += "💰 Курсы валют - актуальные онлайн\n"
+    help_text += "🌤 Погода - в любом городе\n"
+    help_text += "🔤 Перевод - текста\n"
+    help_text += "🎯 Позывной - генератор"
 
     bot.send_message(message.chat.id, help_text, parse_mode='HTML')
 
@@ -603,38 +737,21 @@ def back_to_main(message):
     start_command(message)
 
 
-@bot.message_handler(func=lambda message: True)
-def handle_all_messages(message):
-    text = message.text.lower()
-    
-    if text in ['спасибо', 'спс', 'благодарю']:
-        bot.send_message(message.chat.id, "🙏 Пожалуйста! Обращайся!")
-    elif text == 'привет':
-        bot.send_message(message.chat.id, f"👋 Привет, {message.from_user.first_name}!")
-    elif text == 'id':
-        bot.send_message(message.chat.id, f"🆔 Ваш ID: {message.from_user.id}")
-    elif text == 'пока':
-        bot.send_message(message.chat.id, "👋 До встречи!")
-
-
 # ========== ЗАПУСК ==========
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("✅ БОТ С DEEPSEEK AI ЗАПУЩЕН!")
-    print("📱 Версия: 7.0 (DeepSeek + генерация картинок)")
-    print("📱 Токен:", TOKEN[:10] + "...")
-    print("🔑 DeepSeek ключ:", DEEPSEEK_KEY[:10] + "...")
+    print("✅ БОТ ЗАПУЩЕН!")
+    print("📱 Версия: 8.0 (Финальная)")
     print("=" * 60)
-    print("🤖 НЕЙРОСЕТЕВЫЕ ФУНКЦИИ:")
-    print("   • Спросить DeepSeek (как я)")
+    print("🤖 НЕЙРОСЕТИ:")
+    print("   • Спросить DeepSeek")
     print("   • Генерация картинок")
     print("   • Фильмы по настроению")
-    print("=" * 60)
-    print("📋 Обычные функции:")
-    print("   • 💰 Курсы валют, 🎲 Факт, 😄 Анекдот")
-    print("   • 🌤 Погода, 🔤 Перевод, 🎯 Позывной")
-    print("   • 🕐 Время, 📅 Дата")
+    print("📸 ФОТО:")
+    print("   • Мемы, сжатие, распознавание")
+    print("💰 КУРСЫ ВАЛЮТ (онлайн):")
+    print("   • USD, EUR, CNY, GBP, JPY")
     print("=" * 60)
 
     while True:
