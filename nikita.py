@@ -7,7 +7,7 @@ import urllib.parse
 from datetime import datetime
 
 # ========== НАСТРОЙКИ ==========
-TOKEN = "8529993544:AAEHluimYCHsEmZmMYVVBE7hZpKaR149v88"
+TOKEN = "8649201126:AAH8XA628lkSP9CLHukCcKJuo8CJr_cv2LM"
 bot = tb.TeleBot(TOKEN)
 
 # Хранилище для фото
@@ -295,3 +295,4 @@ if __name__ == "__main__":
             bot.polling(non_stop=True)
         except:
             time.sleep(5)
+
