@@ -1,4 +1,4 @@
-import telebot as tbimport telebot as tb
+import telebot as tb
 from datetime import datetime
 from telebot import types
 import time
@@ -7,10 +7,29 @@ import random
 import urllib.parse
 import io
 import os
+import threading
 from PIL import Image, ImageDraw, ImageFont
 
+# ========== ДЛЯ RENDER ==========
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class HealthCheck(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+    
+    def log_message(self, format, *args):
+        pass  # Отключаем логи сервера
+
+def run_health_server():
+    port = int(os.environ.get('PORT', 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthCheck)
+    print(f"🌐 Health check server running on port {port}")
+    server.serve_forever()
+
 # ========== НОВЫЙ ТОКЕН ==========
-TOKEN = "8649201126:AAH8XA628lkSP9CLHukCcKJuo8CJr_cv2LM"  # Новый токен!
+TOKEN = "8649201126:AAH8XA628lkSP9CLHukCcKJuo8CJr_cv2LM"
 YOUR_CHAT_ID = 1551325264
 DEEPSEEK_KEY = "sk-d838f69da7794f3998464fd7ead477b9"
 
@@ -374,7 +393,13 @@ if __name__ == "__main__":
     print("✅ БОТ ЗАПУЩЕН!")
     print(f"🔑 Токен: {TOKEN[:15]}...")
     print("=" * 50)
-    print("⚠️ ВАЖНО: Закройте бота на компьютере!")
+    print("🌐 Запускаем health check server...")
+    
+    # Запускаем health check сервер в отдельном потоке
+    server_thread = threading.Thread(target=run_health_server, daemon=True)
+    server_thread.start()
+    
+    print("🤖 Запускаем бота...")
     print("=" * 50)
     
     while True:
