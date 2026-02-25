@@ -39,11 +39,22 @@ def get_deepseek_response(prompt):
         data = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "Ты полезный и дружелюбный ассистент. Отвечай развернуто, понятно и с эмодзи. Помогай с любыми вопросами."},
+                {
+                    "role": "system", 
+                    "content": """Ты - умный AI-ассистент. Отвечай на вопросы РАЗВЕРНУТО и по существу.
+
+ПРАВИЛА:
+1. Если спрашивают про код - сразу давай готовый код
+2. Если спрашивают факты - давай точные цифры и данные
+3. Используй эмодзи для наглядности
+4. Не задавай встречных вопросов - сразу отвечай
+5. Ответы должны быть полезными и информативными"""
+                },
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.8,
-            "max_tokens": 2000
+            "temperature": 1.0,  # Увеличил для разнообразия
+            "max_tokens": 2000,
+            "top_p": 0.95
         }
         
         response = requests.post(url, headers=headers, json=data, timeout=30)
@@ -53,12 +64,12 @@ def get_deepseek_response(prompt):
             return result['choices'][0]['message']['content']
         else:
             print(f"Ошибка DeepSeek: {response.status_code}")
-            print(f"Ответ: {response.text}")
-            return fallback_ai_response(prompt)
+            # ВОЗВРАЩАЕМ ОШИБКУ, А НЕ FALLBACK
+            return f"❌ Ошибка API DeepSeek: {response.status_code}. Проверьте ключ и баланс."
             
     except Exception as e:
         print(f"Ошибка DeepSeek: {e}")
-        return fallback_ai_response(prompt)
+        return f"❌ Ошибка соединения с DeepSeek: {e}"
 
 
 def fallback_ai_response(prompt):
@@ -680,3 +691,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"❌ Ошибка: {e}")
             time.sleep(5)
+
