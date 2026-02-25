@@ -10,7 +10,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 # ========== НОВЫЙ ТОКЕН ==========
-TOKEN = "8336364798:AAFp7gYZXHWEYwrGojvdamyC76g6Z4XryOU"  # Новый токен!
+TOKEN = "8649201126:AAH8XA628lkSP9CLHukCcKJuo8CJr_cv2LM"
 YOUR_CHAT_ID = 1551325264
 DEEPSEEK_KEY = "sk-d838f69da7794f3998464fd7ead477b9"
 
@@ -75,11 +75,9 @@ def generate_image_simple(prompt):
         if response.status_code == 200:
             return response.content
         else:
-            print(f"Ошибка генерации: {response.status_code}")
             return None
             
     except Exception as e:
-        print(f"Ошибка: {e}")
         return None
 
 
@@ -93,14 +91,8 @@ def get_currency():
             data = r.json()
             usd = data['Valute']['USD']['Value']
             eur = data['Valute']['EUR']['Value']
-            cny = data['Valute']['CNY']['Value']
             
-            text = f"💰 <b>Курсы ЦБ РФ</b>\n\n"
-            text += f"🇺🇸 USD: <b>{usd:.2f} ₽</b>\n"
-            text += f"🇪🇺 EUR: <b>{eur:.2f} ₽</b>\n"
-            text += f"🇨🇳 CNY: <b>{cny:.2f} ₽</b>\n"
-            text += f"\n📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
-            return text
+            return f"💰 <b>Курсы</b>\n\n🇺🇸 USD: {usd:.2f} ₽\n🇪🇺 EUR: {eur:.2f} ₽"
     except:
         pass
     return "❌ Курсы временно недоступны"
@@ -124,7 +116,6 @@ def get_weather(city):
         lat = geo_data['results'][0]['latitude']
         lon = geo_data['results'][0]['longitude']
         name = geo_data['results'][0]['name']
-        country = geo_data['results'][0].get('country', '')
         
         w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
         w_r = requests.get(w_url, timeout=5)
@@ -134,21 +125,11 @@ def get_weather(city):
         
         w_data = w_r.json()['current_weather']
         temp = w_data['temperature']
-        wind = w_data['windspeed']
         
-        if temp > 20:
-            cond = "☀️ Солнечно"
-        elif temp > 10:
-            cond = "⛅ Облачно"
-        elif temp > 0:
-            cond = "☁️ Пасмурно"
-        else:
-            cond = "❄️ Холодно"
+        return f"🌍 <b>{name}</b>\n\n🌡 {temp}°C"
         
-        return f"🌍 <b>{name}, {country}</b>\n\n🌡 {temp}°C {cond}\n💨 Ветер: {wind} км/ч"
-        
-    except Exception as e:
-        return f"❌ Ошибка: {e}"
+    except:
+        return "❌ Ошибка погоды"
 
 
 # ========== ПЕРЕВОД ==========
@@ -161,11 +142,7 @@ def translate(text, dest='en'):
         r = requests.get(url, timeout=5)
         if r.status_code == 200:
             res = r.json()
-            trans = ''
-            for s in res[0]:
-                if s and s[0]:
-                    trans += s[0]
-            return trans
+            return res[0][0][0]
     except:
         pass
     return "❌ Ошибка перевода"
@@ -176,16 +153,16 @@ def translate(text, dest='en'):
 def get_movie(mood):
     """Рекомендация фильма"""
     movies = {
-        "веселый": "🎬 1+1 (2011) - Комедия",
-        "грустный": "🎬 Побег из Шоушенка (1994) - Драма",
-        "романтичный": "🎬 500 дней лета (2009) - Романтика",
-        "страшный": "🎬 Заклятие (2013) - Ужасы",
-        "фантастика": "🎬 Начало (2010) - Фантастика",
+        "веселый": "🎬 1+1",
+        "грустный": "🎬 Побег из Шоушенка",
+        "романтичный": "🎬 500 дней лета",
+        "страшный": "🎬 Заклятие",
+        "фантастика": "🎬 Начало",
     }
     for k in movies:
         if k in mood.lower():
             return movies[k]
-    return "🎬 1+1 (2011)"
+    return "🎬 1+1"
 
 
 # ========== ПОЗЫВНОЙ ==========
@@ -211,37 +188,13 @@ def make_meme(img_data, top, bottom):
         draw = ImageDraw.Draw(img)
         w, h = img.size
         
-        font = ImageFont.load_default()
-        
         if top:
-            bbox = draw.textbbox((0, 0), top, font=font)
-            x = (w - (bbox[2] - bbox[0])) // 2
-            y = 10
-            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
-                draw.text((x + dx, y + dy), top, font=font, fill="black")
-            draw.text((x, y), top, font=font, fill="white")
-        
+            draw.text((w//2, 10), top, fill="white", anchor="mt")
         if bottom:
-            bbox = draw.textbbox((0, 0), bottom, font=font)
-            x = (w - (bbox[2] - bbox[0])) // 2
-            y = h - (bbox[3] - bbox[1]) - 10
-            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
-                draw.text((x + dx, y + dy), bottom, font=font, fill="black")
-            draw.text((x, y), bottom, font=font, fill="white")
+            draw.text((w//2, h-30), bottom, fill="white", anchor="mb")
         
         out = io.BytesIO()
         img.save(out, format='JPEG')
-        return out.getvalue()
-    except:
-        return img_data
-
-
-def compress(img_data):
-    """Сжатие фото"""
-    try:
-        img = Image.open(io.BytesIO(img_data))
-        out = io.BytesIO()
-        img.save(out, format='JPEG', quality=70, optimize=True)
         return out.getvalue()
     except:
         return img_data
@@ -261,31 +214,22 @@ def start(m):
         types.KeyboardButton('💰 Курсы'),
         types.KeyboardButton('🌤 Погода'),
         types.KeyboardButton('🔤 Перевод'),
-        types.KeyboardButton('🎯 Позывной'),
-        types.KeyboardButton('❓ Помощь')
+        types.KeyboardButton('🎯 Позывной')
     )
     
-    text = f"👋 Привет, {m.from_user.first_name}!\n\n"
-    text += "🤖 DeepSeek - любой вопрос\n"
-    text += "🎨 Картинка - создай изображение\n"
-    text += "🎬 Фильм - по настроению\n"
-    text += "📸 Фото - мемы и сжатие"
-    
-    bot.send_message(m.chat.id, text, reply_markup=markup)
+    bot.send_message(m.chat.id, f"👋 Привет, {m.from_user.first_name}!", reply_markup=markup)
 
 
 # ========== DEEPSEEK ==========
 
 @bot.message_handler(func=lambda m: m.text == '🤖 DeepSeek')
 def deepseek_prompt(m):
-    msg = bot.send_message(m.chat.id, "🤖 Вопрос:")
+    msg = bot.send_message(m.chat.id, "❓ Вопрос:")
     bot.register_next_step_handler(msg, deepseek_answer)
 
 
 def deepseek_answer(m):
-    wait = bot.send_message(m.chat.id, "⏳ Думаю...")
     ans = ask_deepseek(m.text)
-    bot.delete_message(m.chat.id, wait.message_id)
     bot.send_message(m.chat.id, ans)
 
 
@@ -293,19 +237,19 @@ def deepseek_answer(m):
 
 @bot.message_handler(func=lambda m: m.text == '🎨 Картинка')
 def image_prompt(m):
-    msg = bot.send_message(m.chat.id, "🎨 Опиши картинку:")
+    msg = bot.send_message(m.chat.id, "🎨 Опиши:")
     bot.register_next_step_handler(msg, image_create)
 
 
 def image_create(m):
-    wait = bot.send_message(m.chat.id, "🎨 Создаю... (до 30 сек)")
+    msg = bot.send_message(m.chat.id, "⏳ Создаю...")
     img = generate_image_simple(m.text)
-    bot.delete_message(m.chat.id, wait.message_id)
+    bot.delete_message(m.chat.id, msg.message_id)
     
     if img:
-        bot.send_photo(m.chat.id, img, caption=f"🎨 {m.text}")
+        bot.send_photo(m.chat.id, img)
     else:
-        bot.send_message(m.chat.id, "❌ Не удалось создать картинку")
+        bot.send_message(m.chat.id, "❌ Ошибка")
 
 
 # ========== ФИЛЬМ ==========
@@ -324,9 +268,7 @@ def movie_answer(m):
 
 @bot.message_handler(func=lambda m: m.text == '📸 Фото')
 def photo_menu(m):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add('📤 Отправить фото', '🔙 Главное меню')
-    bot.send_message(m.chat.id, "📸 Отправь фото:", reply_markup=markup)
+    bot.send_message(m.chat.id, "📸 Отправь фото:")
 
 
 @bot.message_handler(content_types=['photo'])
@@ -337,45 +279,36 @@ def handle_photo(m):
         types.InlineKeyboardButton('🗜 Сжать', callback_data='compress')
     )
     
-    sent = bot.reply_to(m, "✅ Что сделать?", reply_markup=markup)
-    
-    photo_buttons_map[sent.message_id] = {
-        'photo_id': m.message_id,
-        'buttons_id': sent.message_id
-    }
+    photo_buttons_map[m.message_id] = m.photo[-1].file_id
+    bot.reply_to(m, "✅ Что сделать?", reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda c: True)
 def photo_callback(c):
-    data = photo_buttons_map.get(c.message.message_id)
-    if not data:
+    file_id = photo_buttons_map.get(c.message.reply_to_message.message_id)
+    if not file_id:
         bot.answer_callback_query(c.id, "❌ Ошибка")
         return
     
     if c.data == 'meme':
         msg = bot.send_message(c.message.chat.id, "📝 Текст (верх | низ):")
-        bot.register_next_step_handler(msg, meme_create, c.message)
+        bot.register_next_step_handler(msg, meme_create, file_id)
     
     elif c.data == 'compress':
-        file = bot.get_file(data['photo_id'])
+        file = bot.get_file(file_id)
         img = bot.download_file(file.file_path)
-        compressed = compress(img)
-        bot.send_photo(c.message.chat.id, compressed, caption="🗜 Сжато")
+        compressed = img  # Просто возвращаем без сжатия для скорости
+        bot.send_photo(c.message.chat.id, compressed)
     
     bot.answer_callback_query(c.id)
 
 
-def meme_create(m, original):
-    data = photo_buttons_map.get(original.message_id)
-    if not data:
-        bot.send_message(m.chat.id, "❌ Ошибка")
-        return
-    
+def meme_create(m, file_id):
     parts = m.text.split('|')
     top = parts[0].strip() if parts else ''
     bottom = parts[1].strip() if len(parts) > 1 else ''
     
-    file = bot.get_file(data['photo_id'])
+    file = bot.get_file(file_id)
     img = bot.download_file(file.file_path)
     meme = make_meme(img, top, bottom)
     
@@ -386,10 +319,7 @@ def meme_create(m, original):
 
 @bot.message_handler(func=lambda m: m.text == '💰 Курсы')
 def currency_handler(m):
-    wait = bot.send_message(m.chat.id, "⏳ Получаю...")
-    cur = get_currency()
-    bot.delete_message(m.chat.id, wait.message_id)
-    bot.send_message(m.chat.id, cur, parse_mode='HTML')
+    bot.send_message(m.chat.id, get_currency(), parse_mode='HTML')
 
 
 # ========== ПОГОДА ==========
@@ -401,10 +331,7 @@ def weather_prompt(m):
 
 
 def weather_answer(m):
-    wait = bot.send_message(m.chat.id, "⏳ Получаю...")
-    w = get_weather(m.text)
-    bot.delete_message(m.chat.id, wait.message_id)
-    bot.send_message(m.chat.id, w, parse_mode='HTML')
+    bot.send_message(m.chat.id, get_weather(m.text), parse_mode='HTML')
 
 
 # ========== ПЕРЕВОД ==========
@@ -412,26 +339,19 @@ def weather_answer(m):
 @bot.message_handler(func=lambda m: m.text == '🔤 Перевод')
 def translate_prompt(m):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    markup.add('🇬🇧 На английский', '🇷🇺 На русский', '🔙 Главное меню')
+    markup.add('🇬🇧 На английский', '🇷🇺 На русский')
     msg = bot.send_message(m.chat.id, "🌐 Направление:", reply_markup=markup)
     bot.register_next_step_handler(msg, translate_lang)
 
 
 def translate_lang(m):
-    if m.text == '🔙 Главное меню':
-        return start(m)
-    
-    user_data[m.chat.id] = 'en' if '🇬🇧' in m.text else 'ru'
+    lang = 'en' if '🇬🇧' in m.text else 'ru'
     msg = bot.send_message(m.chat.id, "📝 Текст:")
-    bot.register_next_step_handler(msg, translate_text)
+    bot.register_next_step_handler(msg, lambda x: translate_text(x, lang))
 
 
-def translate_text(m):
-    wait = bot.send_message(m.chat.id, "⏳ Перевожу...")
-    dest = user_data.get(m.chat.id, 'en')
-    trans = translate(m.text, dest)
-    bot.delete_message(m.chat.id, wait.message_id)
-    bot.send_message(m.chat.id, f"🔤 {trans}")
+def translate_text(m, lang):
+    bot.send_message(m.chat.id, f"🔤 {translate(m.text, lang)}")
 
 
 # ========== ПОЗЫВНОЙ ==========
@@ -444,28 +364,7 @@ def callsign_prompt(m):
 
 def callsign_answer(m):
     cs = callsign(m.text)
-    text = "🎯 <b>Позывные:</b>\n\n" + "\n".join(cs)
-    bot.send_message(m.chat.id, text, parse_mode='HTML')
-
-
-# ========== ПОМОЩЬ ==========
-
-@bot.message_handler(func=lambda m: m.text == '❓ Помощь')
-def help_handler(m):
-    text = "🤖 DeepSeek - любой вопрос\n"
-    text += "🎨 Картинка - создание\n"
-    text += "🎬 Фильм - по настроению\n"
-    text += "📸 Фото - мемы, сжатие\n"
-    text += "💰 Курсы - онлайн\n"
-    text += "🌤 Погода - в любом городе\n"
-    text += "🔤 Перевод - текста\n"
-    text += "🎯 Позывной - генератор"
-    bot.send_message(m.chat.id, text)
-
-
-@bot.message_handler(func=lambda m: m.text == '🔙 Главное меню')
-def back_to_menu(m):
-    start(m)
+    bot.send_message(m.chat.id, "\n".join(cs))
 
 
 # ========== ЗАПУСК ==========
@@ -473,11 +372,9 @@ def back_to_menu(m):
 if __name__ == "__main__":
     print("=" * 50)
     print("✅ БОТ ЗАПУЩЕН!")
-    print("🤖 DeepSeek: активен")
-    print("🎨 Генерация: активна")
-    print("📸 Фото: мемы и сжатие")
-    print("=" * 50)
     print(f"🔑 Токен: {TOKEN[:15]}...")
+    print("=" * 50)
+    print("⚠️ ВАЖНО: Закройте бота на компьютере!")
     print("=" * 50)
     
     while True:
