@@ -9,8 +9,8 @@ import io
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-# ========== НАСТРОЙКИ ==========
-TOKEN = "8529993544:AAEHluimYCHsEmZmMYVVBE7hZpKaR149v88"
+# ========== НОВЫЙ ТОКЕН ==========
+TOKEN = "8336364798:AAFp7gYZXHWEYwrGojvdamyC76g6Z4XryOU"  # Новый токен!
 YOUR_CHAT_ID = 1551325264
 DEEPSEEK_KEY = "sk-d838f69da7794f3998464fd7ead477b9"
 
@@ -20,7 +20,7 @@ user_data = {}
 photo_buttons_map = {}
 
 
-# ========== DEEPSEEK AI (ИСПРАВЛЕНО) ==========
+# ========== DEEPSEEK AI ==========
 
 def ask_deepseek(question):
     """Спрашивает DeepSeek и получает ответ"""
@@ -57,12 +57,11 @@ def ask_deepseek(question):
         return f"❌ Ошибка: {e}"
 
 
-# ========== ГЕНЕРАЦИЯ КАРТИНОК (РАБОЧАЯ) ==========
+# ========== ГЕНЕРАЦИЯ КАРТИНОК ==========
 
 def generate_image_simple(prompt):
-    """ПРОСТАЯ и РАБОЧАЯ генерация картинок"""
+    """Простая генерация картинок"""
     try:
-        # Используем самый надежный бесплатный API
         url = "https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt)
         params = {
             "width": 1024,
@@ -112,7 +111,6 @@ def get_currency():
 def get_weather(city):
     """Погода в городе"""
     try:
-        # Получаем координаты
         geo = f"https://geocoding-api.open-meteo.com/v1/search?name={city}&count=1&language=ru&format=json"
         geo_r = requests.get(geo, timeout=5)
         
@@ -128,7 +126,6 @@ def get_weather(city):
         name = geo_data['results'][0]['name']
         country = geo_data['results'][0].get('country', '')
         
-        # Получаем погоду
         w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
         w_r = requests.get(w_url, timeout=5)
         
@@ -139,7 +136,6 @@ def get_weather(city):
         temp = w_data['temperature']
         wind = w_data['windspeed']
         
-        # Погодные условия
         if temp > 20:
             cond = "☀️ Солнечно"
         elif temp > 10:
@@ -221,12 +217,16 @@ def make_meme(img_data, top, bottom):
             bbox = draw.textbbox((0, 0), top, font=font)
             x = (w - (bbox[2] - bbox[0])) // 2
             y = 10
+            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                draw.text((x + dx, y + dy), top, font=font, fill="black")
             draw.text((x, y), top, font=font, fill="white")
         
         if bottom:
             bbox = draw.textbbox((0, 0), bottom, font=font)
             x = (w - (bbox[2] - bbox[0])) // 2
             y = h - (bbox[3] - bbox[1]) - 10
+            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                draw.text((x + dx, y + dy), bottom, font=font, fill="black")
             draw.text((x, y), bottom, font=font, fill="white")
         
         out = io.BytesIO()
@@ -476,6 +476,8 @@ if __name__ == "__main__":
     print("🤖 DeepSeek: активен")
     print("🎨 Генерация: активна")
     print("📸 Фото: мемы и сжатие")
+    print("=" * 50)
+    print(f"🔑 Токен: {TOKEN[:15]}...")
     print("=" * 50)
     
     while True:
