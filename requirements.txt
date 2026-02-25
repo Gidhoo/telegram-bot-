@@ -1,4 +1,3 @@
 pyTelegramBotAPI
 requests
 Pillow
-urllib3
