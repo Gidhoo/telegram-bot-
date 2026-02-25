@@ -1,4 +1,4 @@
-import telebot as tb
+import telebot as tbimport telebot as tb
 from datetime import datetime
 from telebot import types
 import time
@@ -10,7 +10,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 # ========== НОВЫЙ ТОКЕН ==========
-TOKEN = "8649201126:AAH8XA628lkSP9CLHukCcKJuo8CJr_cv2LM"
+TOKEN = "8649201126:AAH8XA628lkSP9CLHukCcKJuo8CJr_cv2LM"  # Новый токен!
 YOUR_CHAT_ID = 1551325264
 DEEPSEEK_KEY = "sk-d838f69da7794f3998464fd7ead477b9"
 
@@ -297,7 +297,7 @@ def photo_callback(c):
     elif c.data == 'compress':
         file = bot.get_file(file_id)
         img = bot.download_file(file.file_path)
-        compressed = img  # Просто возвращаем без сжатия для скорости
+        compressed = img
         bot.send_photo(c.message.chat.id, compressed)
     
     bot.answer_callback_query(c.id)
